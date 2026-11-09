@@ -1,4 +1,4 @@
-const { PDFDocument, rgb } = require('pdf-lib');
+const { PDFDocument, rgb, degrees } = require('pdf-lib');
 const fs = require('fs');
 const path = require('path');
 
@@ -8,83 +8,128 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // 1. Template Image Load করা
-    const templatePath = path.join(process.cwd(), 'public', 'template_front.jpg');
+    // 1. JPG Template Load করা
+    const templatePath = path.join(process.cwd(), 'public', 'nid_template.jpg');
     
-    // 2. New PDF Create করা
+    // 2. New PDF Create করা (A4 Size)
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([612, 792]); // A4 Size
-    
-    // 3. Background Image Add করা
+    const page = pdfDoc.addPage([612, 792]); 
+
+    // 3. JPG Image Embed করা
     let jpgImage;
     try {
-        const jpgImageBytes = fs.readFileSync(templatePath);
-        jpgImage = await pdfDoc.embedJpg(jpgImageBytes);
-        page.drawImage(jpgImage, { x: 0, y: 0, width: 612, height: 792 });
+      const jpgImageBytes = fs.readFileSync(templatePath);
+      jpgImage = await pdfDoc.embedJpg(jpgImageBytes);
+      
+      // Image Fit to Page
+      page.drawImage(jpgImage, {
+        x: 0, 
+        y: 0, 
+        width: 612, 
+        height: 792,
+      });
     } catch (e) {
-        console.log("Template image not found, creating blank page.");
+      console.warn("Template image not found.");
     }
 
-    // 4. বাংলা ফন্ট লোড করা
+    // 4. Bangla Font Load করা
     let font;
     try {
-      const fontPath = path.join(process.cwd(), 'fonts', 'bangla_font.ttf');
+      const fontPath = path.join(process.cwd(), 'fonts', 'SolaimanLipi.ttf');
       const fontBytes = fs.readFileSync(fontPath);
       font = await pdfDoc.embedFont(fontBytes);
     } catch (err) {
-      console.warn("Bangla font missing, using default");
-      font = null; // Fallback to default if needed, though pdf-lib needs a font object.
-      // If font is null, you might need to embed a standard font or handle error.
-      // For now, we assume the font file exists.
+      console.error("Font error:", err);
+      // Fallback to standard font if custom font fails
+      font = null; 
     }
 
-    // 5. ডাটা নেওয়া
-    const { name, nid, dob, fatherName, address } = req.body;
+    // 5. Data Extract করা
+    const { name, nid, dob, fatherName, motherName, address, bloodGroup } = req.body;
 
-    // 6. টেক্সট আঁকা (Coordinates ঠিক করুন)
-    // X এবং Y মানগুলো আপনার ইমেজ অনুযায়ী ঠিক করতে হবে।
+    // 6. Text Drawing (Coordinates adjust your needs based on your JPG)
+    // Note: Y=0 is bottom-left. You need to adjust these numbers based on your specific JPG layout.
     
     if (font) {
+        // Example Coordinates - Adjust these!
+        
+        // Name
         page.drawText(name || 'নাম উল্লেখযোগ্য নয়', {
-            x: 100, 
+            x: 50, 
+            y: 700,
+            size: 18,
+            font: font,
+            color: rgb(0, 0, 0), // Black text
+        });
+
+        // NID Number
+        page.drawText(nid || '000000000000', {
+            x: 50,
+            y: 650,
+            size: 16,
+            font: font,
+            color: rgb(0, 0, 0),
+        });
+
+        // Father's Name
+        page.drawText(fatherName || 'পিতার নাম', {
+            x: 50,
             y: 600,
             size: 14,
             font: font,
             color: rgb(0, 0, 0),
         });
 
-        page.drawText(nid || '00000000000000000', {
-            x: 100,
-            y: 580,
-            size: 12,
+        // Mother's Name
+        page.drawText(motherName || 'মাতার নাম', {
+            x: 50,
+            y: 570,
+            size: 14,
             font: font,
+            color: rgb(0, 0, 0),
         });
 
-        page.drawText(fatherName || 'পিতার নাম', {
-            x: 100,
-            y: 560,
+        // Date of Birth
+        page.drawText(dob || 'তারিখ', {
+            x: 50,
+            y: 540,
+            size: 14,
+            font: font,
+            color: rgb(0, 0, 0),
+        });
+
+        // Address
+        page.drawText(address || 'ঠিকানা', {
+            x: 50,
+            y: 500,
             size: 12,
             font: font,
+            color: rgb(0, 0, 0),
         });
         
-        // Address Line
-        page.drawText(address || 'ঠিকানা', {
-            x: 100,
-            y: 540,
-            size: 12,
+        // Blood Group
+        page.drawText(bloodGroup || 'রক্তের গ্রুপ', {
+            x: 50,
+            y: 470,
+            size: 14,
             font: font,
+            color: rgb(0, 0, 0),
         });
     } else {
-        // Fallback if font fails
-        page.drawText("Font Error", { x: 100, y: 600, size: 14 });
+        // If font fails, show a warning in the PDF
+        page.drawText("Bangla Font Missing", {
+            x: 50,
+            y: 700,
+            size: 14,
+            color: rgb(1, 0, 0),
+        });
     }
 
-    // 7. PDF Bytes তৈরি করা
+    // 7. PDF Save and Send
     const pdfBytes = await pdfDoc.save();
 
-    // 8. Response পাঠানো
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename=certificate.pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=nid_card.pdf');
     res.send(pdfBytes);
 
   } catch (error) {
