@@ -1,56 +1,17 @@
-import { PDFDocument } from 'pdf-lib';
-
-export async function POST(req) {
-  // 1. ডেটা পড়া
-  const body = await req.json();
-  
-  // 2. টেমপ্লেট ইমেজ URL (Vercel Raw URL)
-  // নিশ্চিত হোন এই ফাইলটি আপনার Vercel ডোমেইনে আপলোড করা আছে
-  const imageUrl = 'https://sgeduufs.vercel.app/nid_template.jpg'; 
-
-  try {
-    console.log('Fetching template from:', imageUrl);
-
-    // 3. ইমেজ ডাউনলোড করা
-    const imageResponse = await fetch(imageUrl);
-    
-    if (!imageResponse.ok) {
-      throw new Error(`Failed to fetch image: ${imageResponse.statusText}`);
-    }
-
-    const arrayBuffer = await imageResponse.arrayBuffer();
-    
-    // 4. PDF ডকুমেন্ট তৈরি
-    const pdfDoc = await PDFDocument.create();
-    
-    // 5. ইমেজ এমবেড করা (JPG হিসেবে)
-    const jpgImage = await pdfDoc.embedJpg(new Uint8Array(arrayBuffer));
-    
-    // 6. পেজ যোগ করা এবং ইমেজ বসানো
-    const page = pdfDoc.addPage([jpgImage.width, jpgImage.height]);
-    page.drawImage(jpgImage, {
-      x: 0,
-      y: 0,
-      width: jpgImage.width,
-      height: jpgImage.height,
-    });
-
-    // 7. PDF সেভ করা
-    const pdfBytes = await pdfDoc.save();
-
-    // 8. রেসপন্স পাঠানো
-    return new Response(pdfBytes, {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': 'attachment; filename="certificate.pdf"',
-      },
-    });
-
-  } catch (error) {
-    console.error('Error generating PDF:', error);
-    return new Response(JSON.stringify({ error: 'Failed to generate PDF', details: error.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-}
+const response = await fetch('https://sgeduufs.vercel.app/api/generate-pdf', {
+  method: 'POST', // ⬅️ এটি অবশ্যই POST হতে হবে
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    name: "Md Shafiqul Islam",
+    father: "Md Karim Uddin",
+    mother: "Mst Amena Begum",
+    dob: "1968-06-14",
+    dod: "2023-12-27",
+    cause: "Heart attack",
+    regNo: "19832015478026451",
+    regDate: "2026-11-06",
+    office: "Batadanga Uttara"
+  })
+});
