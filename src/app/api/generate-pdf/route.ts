@@ -1,35 +1,60 @@
 import { NextResponse } from 'next/server';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
-// এই ফাংশনটি POST রিকোয়েস্ট হ্যান্ডেল করবে
+// GET মেথডও এক্সপোর্ট করুন যাতে ডিরেক্ট URL চেক করা যায়
+export async function GET() {
+  return new Response("API is working", { status: 200 });
+}
+
 export async function POST(request: Request) {
   try {
-    // 1. ডেটা পড়া
+    // 1. ডেটা পাarsing
     const body = await request.json();
     
-    // 2. টেমপ্লেট ইমেজ URL (নিশ্চিত হোন এই ইমেজটি আপনার প্রজেক্টের public ফোল্ডারে আছে)
-    // উদাহরণস্বরূপ: /nid_template.jpg
-    const imageUrl = '/nid_template.jpg'; 
-
-    console.log('Fetching template:', imageUrl);
-
-    // 3. ইমেজ ডাউনলোড
-    const imageResponse = await fetch(`https://sgeduufs.vercel.app${imageUrl}`);
-    if (!imageResponse.ok) throw new Error(`Image fetch failed: ${imageResponse.statusText}`);
+    // 2. টেমপ্লেট ইমেজ URL (নিশ্চিত হোন public/folder/image.jpg নামে ইমেজটি আছে)
+    // উদাহরণ: /nid_template.jpg
+    const templateUrl = '/nid_template.jpg'; 
     
-    const arrayBuffer = await imageResponse.arrayBuffer();
-    
-    // 4. PDF তৈরি
+    console.log('Starting PDF generation...');
+
+    // 3. টেমপ্লেট ইমেজ ডাউনলোড
+    let imgBytes;
+    try {
+      const res = await fetch(`https://sgeduufs.vercel.app${templateUrl}`);
+      if (!res.ok) throw new Error(`Image fetch failed: ${res.status}`);
+      imgBytes = await res.arrayBuffer();
+    } catch (e: any) {
+      return NextResponse.json({ error: 'Template image not found', details: e.message }, { status: 404 });
+    }
+
+    // 4. PDF ডকুমেন্ট তৈরি
     const pdfDoc = await PDFDocument.create();
-    const jpgImage = await pdfDoc.embedJpg(new Uint8Array(arrayBuffer));
     
-    const page = pdfDoc.addPage([jpgImage.width, jpgImage.height]);
-    page.drawImage(jpgImage, {
-      x: 0, y: 0, width: jpgImage.width, height: jpgImage.height,
+    // ইমেজ ইমবেড করা (JPG বা PNG)
+    let embeddedImg;
+    try {
+      embeddedImg = await pdfDoc.embedPng(imgBytes); // যদি PNG হয়
+      // অথবা embedJpg(imgBytes) যদি JPG হয়
+    } catch (e: any) {
+       return NextResponse.json({ error: 'Image format error', details: e.message }, { status: 500 });
+    }
+
+    // পেজ যোগ করা
+    const page = pdfDoc.addPage([embeddedImg.width, embeddedImg.height]);
+    page.drawImage(embeddedImg, {
+      x: 0, y: 0, width: embeddedImg.width, height: embeddedImg.height,
     });
 
+    // 5. টেক্সট যোগ করা (Optional - যদি টেমপ্লেটে খালি জায়গা থাকে)
+    const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+    page.drawText(body.nameEnglish || 'Name', {
+      x: 50, y: 500, size: 12, font: timesRomanFont, color: rgb(0, 0, 0),
+    });
+
+    // 6. PDF সেভ করা
     const pdfBytes = await pdfDoc.save();
 
+    // 7. রেসপন্স ফেরত দেওয়া
     return new Response(pdfBytes, {
       headers: {
         'Content-Type': 'application/pdf',
@@ -38,14 +63,18 @@ export async function POST(request: Request) {
     });
 
   } catch (error: any) {
-    console.error('API Error:', error);
+    console.error('Full Error:', error);
     return NextResponse.json(
-      { error: 'Failed to generate PDF', details: error.message },
+      { 
+        error: 'Internal Server Error', 
+        details: error.message,
+        stack: error.stack 
+      },
       { status: 500 }
     );
   }
 }
 
-// ⚠️ গুরুত্বপূর্ণ: Vercel-কে জানান যে এই রুটে POST মেথড সাপোর্ট করে
+// Vercel-এর জন্য Dynamic Route সেটিংস
 export const dynamic = 'force-dynamic';
-export const revalidate = false;
+export const revalidate = 0;
