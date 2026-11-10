@@ -1,59 +1,45 @@
 import { NextResponse } from 'next/server';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 
-// POST রিকোয়েস্ট হ্যান্ডল করার ফাংশন
+// এই ফাংশনটি POST রিকোয়েস্ট হ্যান্ডল করবে
 export async function POST(request: Request) {
   try {
-    // ১. JSON ডেটা পাঠ করা
+    // ১. ডেটা পাঠানো হয়েছে কিনা চেক করা
     const body = await request.json();
     
-    // ২. টেমপ্লেট ইমেজ লোড করা
-    // /public/folder থেকে ইমেজ ফেচ করা হচ্ছে
-    const templateUrl = '/nid_template.jpg'; 
-    
-    let imgBytes;
-    try {
-      const res = await fetch(`https://sgeduufs.vercel.app${templateUrl}`);
-      if (!res.ok) throw new Error(`Image fetch failed: ${res.status} ${res.statusText}`);
-      imgBytes = await res.arrayBuffer();
-    } catch (e: any) {
-      return NextResponse.json({ error: 'Template image not found', details: e.message }, { status: 404 });
+    if (!body.nameEnglish) {
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
-    // ৩. PDF ডকুমেন্ট তৈরি
+    // ২. PDF ডকুমেন্ট তৈরি করা
     const pdfDoc = await PDFDocument.create();
     
-    // ইমেজ এমবেড করা
-    let embeddedImg;
-    try {
-      embeddedImg = await pdfDoc.embedJpg(imgBytes);
-    } catch (e: any) {
-       return NextResponse.json({ error: 'Image format error', details: e.message }, { status: 500 });
-    }
-
-    // ৪. পেজ যোগ করা (ইমেজ সাইজ অনুযায়ী)
-    const page = pdfDoc.addPage([embeddedImg.width, embeddedImg.height]);
-    page.drawImage(embeddedImg, {
-      x: 0, y: 0, width: embeddedImg.width, height: embeddedImg.height,
-    });
-
-    // ৫. টেক্সট যোগ করা (টেমপ্লেটের খালি জায়গায়)
-    // নোট: X এবং Y কোঅর্ডিনেট আপনার টেমপ্লেট অনুযায়ী ঠিক করতে হবে
-    const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+    // A4 সাইজের পেজ যোগ করা
+    const page = pdfDoc.addPage([595, 842]); // A4 size in points
     
-    // উদাহরণ: নাম প্রিন্ট করা
-    page.drawText(body.nameEnglish || 'Name Not Provided', {
-      x: 50, 
-      y: 500, // এই Y মানটি আপনার টেমপ্লেটের সাথে মিলিয়ে পরিবর্তন করুন
-      size: 12, 
-      font: timesRomanFont, 
-      color: rgb(0, 0, 0),
+    // টেক্সট ফন্ট লোড করা
+    const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    
+    // ৩. টেক্সট বসানো (উদাহরণ হিসেবে)
+    // X এবং Y কোঅর্ডিনেট আপনার টেমপ্লেট অনুযায়ী ঠিক করতে হবে
+    page.drawText('Death Certificate', {
+      x: 200,
+      y: 750,
+      size: 20,
+      font: helveticaFont,
     });
 
-    // ৬. PDF সেভ করা
+    page.drawText(`Name: ${body.nameEnglish}`, {
+      x: 50,
+      y: 700,
+      size: 12,
+      font: helveticaFont,
+    });
+
+    // ৪. PDF সেভ করা
     const pdfBytes = await pdfDoc.save();
 
-    // ৭. PDF রেসপন্স হিসেবে ফেরত দেওয়া
+    // ৫. PDF ডাউনলোডের জন্য রেসপন্স দেওয়া
     return new Response(pdfBytes, {
       headers: {
         'Content-Type': 'application/pdf',
@@ -62,21 +48,14 @@ export async function POST(request: Request) {
     });
 
   } catch (error: any) {
-    console.error('Full Error:', error);
-    return NextResponse.json(
-      { 
-        error: 'Internal Server Error', 
-        details: error.message,
-        stack: error.stack 
-      },
-      { status: 500 }
-    );
+    console.error('Error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
 // GET রিকোয়েস্ট (টেস্ট করার জন্য)
 export async function GET() {
-  return new Response("API is working", { status: 200 });
+  return new Response("API is working! Send a POST request to generate PDF.", { status: 200 });
 }
 
 // স্ট্যাটিক জেনারেশন বন্ধ করা
